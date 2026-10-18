@@ -29,22 +29,35 @@ function renderBody(
 }
 
 async function start() {
-    const connector = new Connector();
-    window.addEventListener('unload', () => connector.disconnect(), {
-        passive: true,
-    });
+    try {
+        const connector = new Connector();
+        window.addEventListener('unload', () => connector.disconnect(), {
+            passive: true,
+        });
 
-    const [data, fonts] = await Promise.all([
-        connector.getData(),
-        getFontList(),
-    ]);
-    renderBody(data, fonts, connector);
-    connector.subscribeToChanges((data) =>
-        renderBody(data, fonts, connector),
-    );
+        const [data, fonts] = await Promise.all([
+            connector.getData(),
+            getFontList(),
+        ]);
+        renderBody(data, fonts, connector);
+        connector.subscribeToChanges((data) =>
+            renderBody(data, fonts, connector),
+        );
+    } catch (err: any) {
+        console.error('Failed to start popup:', err);
+        const msg = err?.message || String(err);
+        const el = document.querySelector('.loader__message');
+        if (el) {
+            el.textContent = `Error: ${msg}`;
+        }
+    }
 }
 
-addEventListener('load', start, {passive: true});
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    start();
+} else {
+    addEventListener('load', start, {passive: true});
+}
 
 document.documentElement.classList.toggle('mobile', isMobile);
 document.documentElement.classList.toggle('firefox', isFirefox);

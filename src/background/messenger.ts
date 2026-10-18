@@ -11,7 +11,6 @@ import {MessageTypeBGtoUI, MessageTypeUItoBG} from '../utils/message';
 import {isFirefox} from '../utils/platform';
 
 import {makeFirefoxHappy} from './make-firefox-happy';
-import {ASSERT} from './utils/log';
 
 export interface ExtensionAdapter {
   collect: () => Promise<ExtensionData>;
@@ -30,10 +29,7 @@ export default class Messenger {
         Messenger.changeListenerCount = 0;
 
         chrome.runtime.onMessage.addListener(Messenger.messageListener);
-
-        if (isFirefox) {
-            chrome.runtime.onConnect.addListener(Messenger.firefoxPortListener);
-        }
+        chrome.runtime.onConnect.addListener(Messenger.portListener);
     }
 
     private static messageListener(
@@ -48,28 +44,20 @@ export default class Messenger {
         if (isFirefox && makeFirefoxHappy(message, sender, sendResponse)) {
             return;
         }
-        const allowedSenderURL = [
-            chrome.runtime.getURL('/ui/popup/index.html'),
-            chrome.runtime.getURL('/ui/options/index.html'),
-        ];
-        if (allowedSenderURL.includes(sender.url!)) {
+        const isUIMessage = Boolean(
+            message &&
+            typeof (message as any).type === 'string' &&
+            (message as any).type.startsWith('ui-bg-')
+        );
+        if (isUIMessage) {
             Messenger.onUIMessage(message as MessageUItoBG, sendResponse);
-            return [MessageTypeUItoBG.GET_DATA].includes(
-        message.type as MessageTypeUItoBG,
-            );
+            if ((message as any).type === MessageTypeUItoBG.GET_DATA) {
+                return true;
+            }
         }
     }
 
-    private static firefoxPortListener(port: chrome.runtime.Port) {
-        ASSERT(
-            'Messenger.firefoxPortListener() is used only on Firefox',
-            isFirefox,
-        );
-
-        if (!isFirefox) {
-            return;
-        }
-
+    private static portListener(port: chrome.runtime.Port) {
         let promise: Promise<ExtensionData | TabInfo | null>;
         switch (port.name) {
             case MessageTypeUItoBG.GET_DATA:
@@ -80,7 +68,7 @@ export default class Messenger {
         }
         promise
             .then((data) => port.postMessage({data}))
-            .catch((error) => port.postMessage({error}));
+            .catch((error) => port.postMessage({error: error ? (error.message || String(error)) : 'Unknown error'}));
     }
 
     private static onUIMessage(
@@ -92,7 +80,13 @@ export default class Messenger {
     ) {
         switch (type) {
             case MessageTypeUItoBG.GET_DATA:
-                Messenger.adapter.collect().then((data) => sendResponse({data}));
+                Messenger.adapter
+                    .collect()
+                    .then((data) => sendResponse({data}))
+                    .catch((err) => {
+                        console.error('Failed to collect data:', err);
+                        sendResponse({error: String(err)});
+                    });
                 break;
             case MessageTypeUItoBG.SUBSCRIBE_TO_CHANGES:
                 Messenger.changeListenerCount++;
@@ -122,6 +116,8 @@ export default class Messenger {
             chrome.runtime.sendMessage<MessageBGtoUI>({
                 type: MessageTypeBGtoUI.CHANGES,
                 data,
+            })?.catch?.(() => {
+                Messenger.changeListenerCount = 0;
             });
         }
     }

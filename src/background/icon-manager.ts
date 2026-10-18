@@ -53,7 +53,8 @@ export default class IconManager {
     }
 
     static setIcon({isActive = this.iconState.active, colorScheme = 'dark', tabId}: IconOptions): void {
-        if (!chrome.browserAction.setIcon) {
+        const action: typeof chrome.action = (chrome as any).action || chrome.browserAction;
+        if (!action || !action.setIcon) {
             return;
         }
         // eslint-disable-next-line no-empty
@@ -72,20 +73,26 @@ export default class IconManager {
             path = IconManager.ICON_PATHS.activeLight;
         }
 
-        chrome.browserAction.setIcon({path});
+        action.setIcon({path});
         IconManager.handleUpdate();
     }
 
     static showBadge(text: string): void {
         IconManager.iconState.badgeText = text;
-        chrome.browserAction.setBadgeBackgroundColor({color: '#e96c4c'});
-        chrome.browserAction.setBadgeText({text});
+        const action: typeof chrome.action = (chrome as any).action || chrome.browserAction;
+        if (action) {
+            action.setBadgeBackgroundColor({color: '#e96c4c'});
+            action.setBadgeText({text});
+        }
         IconManager.handleUpdate();
     }
 
     static hideBadge(): void {
         IconManager.iconState.badgeText = '';
-        chrome.browserAction.setBadgeText({text: ''});
+        const action: typeof chrome.action = (chrome as any).action || chrome.browserAction;
+        if (action) {
+            action.setBadgeText({text: ''});
+        }
         IconManager.handleUpdate();
     }
 }

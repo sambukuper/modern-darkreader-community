@@ -16,23 +16,21 @@ export default class Connector implements ExtensionActions {
         this.changeSubscribers = new Set();
     }
 
-    private async sendRequest<T>(type: MessageTypeUItoBG): Promise<T> {
-        return new Promise<T>((resolve, reject) => {
-            chrome.runtime.sendMessage<MessageUItoBG>({type}, ({data, error}: MessageUItoBG) => {
-                if (error) {
-                    reject(error);
-                } else {
-                    resolve(data);
-                }
-            });
-        });
-    }
-
-    private async firefoxSendRequestWithResponse<T>(type: MessageTypeUItoBG): Promise<T> {
+    private async sendRequestWithResponse<T>(type: MessageTypeUItoBG): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             const dataPort = chrome.runtime.connect({name: type});
-            dataPort.onDisconnect.addListener(() => reject());
+            let responded = false;
+            dataPort.onDisconnect.addListener(() => {
+                if (!responded) {
+                    if (chrome.runtime.lastError) {
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        reject(new Error('Connection closed before response'));
+                    }
+                }
+            });
             dataPort.onMessage.addListener(({data, error}) => {
+                responded = true;
                 if (error) {
                     reject(error);
                 } else {
@@ -44,10 +42,7 @@ export default class Connector implements ExtensionActions {
     }
 
     async getData(): Promise<ExtensionData> {
-        if (isFirefox) {
-            return await this.firefoxSendRequestWithResponse<ExtensionData>(MessageTypeUItoBG.GET_DATA);
-        }
-        return await this.sendRequest<ExtensionData>(MessageTypeUItoBG.GET_DATA);
+        return await this.sendRequestWithResponse<ExtensionData>(MessageTypeUItoBG.GET_DATA);
     }
 
     private onChangesReceived = ({type, data}: MessageBGtoUI) => {
@@ -60,7 +55,9 @@ export default class Connector implements ExtensionActions {
         this.changeSubscribers.add(callback);
         if (this.changeSubscribers.size === 1) {
             chrome.runtime.onMessage.addListener(this.onChangesReceived);
-            chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.SUBSCRIBE_TO_CHANGES});
+            chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.SUBSCRIBE_TO_CHANGES}, () => {
+                void chrome.runtime.lastError;
+            });
         }
     }
 
@@ -86,26 +83,36 @@ export default class Connector implements ExtensionActions {
     }
 
     changeSettings(settings: Partial<UserSettings>): void {
-        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.CHANGE_SETTINGS, data: settings});
+        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.CHANGE_SETTINGS, data: settings}, () => {
+            void chrome.runtime.lastError;
+        });
     }
 
     setTheme(theme: Partial<Theme>): void {
-        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.SET_THEME, data: theme});
+        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.SET_THEME, data: theme}, () => {
+            void chrome.runtime.lastError;
+        });
     }
 
     toggleActiveTab(): void {
-        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.TOGGLE_ACTIVE_TAB, data: {}});
+        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.TOGGLE_ACTIVE_TAB, data: {}}, () => {
+            void chrome.runtime.lastError;
+        });
     }
 
     loadConfig(options: {local: boolean}): void {
-        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.LOAD_CONFIG, data: options});
+        chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.LOAD_CONFIG, data: options}, () => {
+            void chrome.runtime.lastError;
+        });
     }
 
     disconnect(): void {
         if (this.changeSubscribers.size > 0) {
             this.changeSubscribers.clear();
             chrome.runtime.onMessage.removeListener(this.onChangesReceived);
-            chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.UNSUBSCRIBE_FROM_CHANGES});
+            chrome.runtime.sendMessage<MessageUItoBG>({type: MessageTypeUItoBG.UNSUBSCRIBE_FROM_CHANGES}, () => {
+                void chrome.runtime.lastError;
+            });
         }
     }
 }

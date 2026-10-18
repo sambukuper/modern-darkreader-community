@@ -48,7 +48,11 @@ export async function readText(params: RequestParams): Promise<string> {
                 }, params.timeout);
             }
 
-            fetch(params.url, {signal})
+            const fetchUrl = (params.url.startsWith('http') || params.url.startsWith('chrome-extension://'))
+                ? params.url
+                : chrome.runtime.getURL(params.url.replace(/^(\.\.\/|\/)/, ''));
+
+            fetch(fetchUrl, {signal})
                 .then((response) => {
                     if (response.status >= 200 && (response.status < 300)) {
                         resolve(response.text());

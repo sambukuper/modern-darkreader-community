@@ -1,3 +1,4 @@
+import {DEFAULT_COLORSCHEME} from '../defaults';
 import type {ExtensionData, Theme, Shortcuts, UserSettings, TabInfo, TabData, Command} from '../definitions';
 import createCSSFilterStylesheet from '../generators/css-filter';
 import {getDetectorHintsFor} from '../generators/detector-hints';
@@ -202,25 +203,30 @@ export class Extension {
     }
 
     static async start(): Promise<void> {
-        Extension.init();
-        await TabManager.cleanState();
-        await Promise.all([
-            ConfigManager.load({local: true}),
-            Extension.MV3syncSystemColorStateManager(null),
-            UserStorage.loadSettings(),
-        ]);
-        if (UserStorage.settings.syncSitesFixes) {
-            await ConfigManager.load({local: false});
-        }
-        Extension.updateAutoState();
-        Extension.runWakeDetector();
-        Extension.onAppToggle();
-        logInfo('loaded', UserStorage.settings);
+        try {
+            Extension.init();
+            await TabManager.cleanState();
+            await Promise.all([
+                ConfigManager.load({local: true}),
+                Extension.MV3syncSystemColorStateManager(null),
+                UserStorage.loadSettings(),
+            ]);
+            if (UserStorage.settings.syncSitesFixes) {
+                await ConfigManager.load({local: false});
+            }
+            Extension.updateAutoState();
+            Extension.runWakeDetector();
+            Extension.onAppToggle();
+            logInfo('loaded', UserStorage.settings);
 
-        if (!__CHROMIUM_MV3__ || Extension.isFirstLoad) {
-            TabManager.updateContentScript({runOnProtectedPages: UserStorage.settings.enableForProtectedPages});
+            if (!__CHROMIUM_MV3__ || Extension.isFirstLoad) {
+                TabManager.updateContentScript({runOnProtectedPages: UserStorage.settings.enableForProtectedPages});
+            }
+        } catch (err) {
+            logWarn('Extension.start error', err);
+        } finally {
+            Extension.startBarrier?.resolve();
         }
-        Extension.startBarrier!.resolve();
     }
 
     private static getMessengerAdapter(): ExtensionAdapter {
@@ -304,17 +310,31 @@ export class Extension {
             activeTab,
             isAllowedFileSchemeAccess,
         ] = await Promise.all([
-            Extension.getShortcuts(),
+            Extension.getShortcuts().catch(() => ({})),
             Extension.getActiveTabInfo(),
-            new Promise<boolean>((r) => chrome.extension.isAllowedFileSchemeAccess(r)),
+            new Promise<boolean>((resolve) => {
+                try {
+                    const ext = (chrome as any).extension;
+                    const rt = (chrome as any).runtime;
+                    if (typeof ext?.isAllowedFileSchemeAccess === 'function') {
+                        ext.isAllowedFileSchemeAccess(resolve);
+                    } else if (typeof rt?.isAllowedFileSchemeAccess === 'function') {
+                        rt.isAllowedFileSchemeAccess(resolve);
+                    } else {
+                        resolve(false);
+                    }
+                } catch {
+                    resolve(false);
+                }
+            }),
         ]);
         return {
             isEnabled: Extension.isExtensionSwitchedOn(),
             isReady: true,
-            isAllowedFileSchemeAccess,
+            isAllowedFileSchemeAccess: Boolean(isAllowedFileSchemeAccess),
             settings: UserStorage.settings,
             shortcuts,
-            colorScheme: ConfigManager.COLOR_SCHEMES_RAW!,
+            colorScheme: ConfigManager.COLOR_SCHEMES_RAW || DEFAULT_COLORSCHEME,
             forcedScheme: Extension.autoState === 'scheme-dark' ? 'dark' : Extension.autoState === 'scheme-light' ? 'light' : null,
             activeTab,
         };
