@@ -23,6 +23,21 @@ function SettingsNavButton(props: { onClick: () => void }) {
     );
 }
 
+function ForkNote() {
+    return (
+        <div class="fork-note">
+            <a
+                class="fork-link"
+                href="https://github.com/sambukuper/modern-darkreader-community"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                fork by sambukuper
+            </a>
+        </div>
+    );
+}
+
 type MainPageProps = ViewProps & {
   onThemeNavClick: () => void;
   onSettingsNavClick: () => void;
@@ -40,6 +55,7 @@ export default function MainPage(props: MainPageProps) {
             <section class="m-section">
                 <SettingsNavButton onClick={props.onSettingsNavClick} />
             </section>
+            <ForkNote />
         </Array>
     );
 }

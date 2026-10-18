@@ -114,7 +114,6 @@ export default function Body(props: ViewProps) {
             <section class="m-section pages-section">
                 <Pages {...props} />
             </section>
-            <section class="m-section"></section>
             <Overlay />
         </body>
     );

@@ -115,3 +115,26 @@
         width: 100%;
     }
 }
+
+.fork-note {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    margin-top: @indent-large;
+    text-align: center;
+}
+
+.fork-link {
+    color: @color-control-fore-inactive;
+    font-size: @size-text-small;
+    line-height: @size-text-small-height;
+    opacity: 0.7;
+    text-decoration: none;
+    transition: opacity @time-fast, color @time-fast;
+
+    &:hover {
+        color: @color-fore;
+        opacity: 1;
+        text-decoration: underline;
+    }
+}
